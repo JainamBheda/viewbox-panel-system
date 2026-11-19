@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: viewbox-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-viewbox}
+      POSTGRES_USER: ${POSTGRES_USER:-viewbox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-locally}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - viewbox_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-viewbox} -d ${POSTGRES_DB:-viewbox}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  viewbox_pgdata:
