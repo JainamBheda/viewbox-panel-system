@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -66,6 +67,7 @@ class SurveyForMember(BaseModel):
     survey: SurveyOut
     eligibility: EligibilityOut
     application_status: str | None
+    has_questionnaire: bool = False
 
 
 class ApplicationOut(BaseModel):
@@ -81,3 +83,32 @@ class ApplicationOut(BaseModel):
 
 class CompletionIn(BaseModel):
     quality_status: str
+
+
+class QuestionnaireTextIn(BaseModel):
+    text: str
+
+
+class QuestionnaireVersionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    survey_id: int
+    version: int
+    status: str
+    question_count: int
+    created_at: datetime
+
+
+class AnswerIn(BaseModel):
+    question_id: str | None = None
+    value: Any
+
+
+class RuntimeStepOut(BaseModel):
+    response_id: int
+    status: str
+    version: int
+    question: dict | None
+    progress: float
+    termination_reason: str | None

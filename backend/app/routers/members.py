@@ -8,7 +8,7 @@ from app.models.user import User
 from app.schemas.member import MemberOut, ProfileUpdate
 from app.schemas.ops import PayoutOut, ReferralOut
 from app.schemas.survey import SurveyForMember
-from app.services import eligibility_service, member_service, referral_service, source_service, survey_service
+from app.services import eligibility_service, member_service, questionnaire_service, referral_service, source_service, survey_service
 
 router = APIRouter(prefix="/members", tags=["member portal"])
 
@@ -55,6 +55,7 @@ def my_surveys(user: User = Depends(require_member), db: Session = Depends(get_d
             "survey": survey,
             "eligibility": {"status": result.status, "reason": result.reason, "rule_results": result.rule_results},
             "application_status": None,
+            "has_questionnaire": questionnaire_service.has_active(db, survey.id),
         })
     return results
 

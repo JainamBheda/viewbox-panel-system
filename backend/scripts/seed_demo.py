@@ -12,7 +12,7 @@ from app.models import *  # noqa: F403 — register models
 from app.models.member import Member
 from app.models.survey import Survey
 from app.models.user import User
-from app.services import import_service
+from app.services import import_service, questionnaire_service
 from app.services.auth_service import ensure_source
 from app.services.source_service import ensure_referral_link
 from app.utils.tokens import unique_referral_token, unique_source_token
@@ -34,6 +34,18 @@ SOURCES = [
     ("Staff DM - Agent 02", "STAFF_DM"),
     ("Meta Ads", "META_ADS"),
 ]
+
+DEMO_QUESTIONNAIRE = """Q1 | single | What is your primary commute mode? | Car | Bike | Bus | Walk
+Q2 | multi | Which factors matter most to you? | Price | Safety | Time | Comfort
+Q3 | rating | How satisfied are you with your commute? | 1-5
+Q4 | nps | How likely are you to recommend this study to a friend? | 0-10
+Q5 | text | Any suggestions? Tell us about your {Q1} experience.
+
+SHOW | Q2 | IF | Q1 | EQ | Car
+SKIP | Q5 | IF | Q3 | GTE | 4
+TERMINATE | IF | Q1 | EQ | Walk | Walkers are out of scope for this mobility study
+QUOTA | Q1 | Car | 10
+"""
 
 
 def seed(csv_path: Path | None = None) -> dict:
@@ -102,6 +114,10 @@ def seed(csv_path: Path | None = None) -> dict:
                 rules=[SurveyRule(field_name="age", operator="GTE", expected_value="18", rule_type="STRICT")],
             ))
         db.commit()
+
+        demo_survey = db.execute(select(Survey).where(Survey.title == "Urban Mobility Survey 2026")).scalars().first()
+        if demo_survey and not questionnaire_service.has_active(db, demo_survey.id):
+            questionnaire_service.publish(db, demo_survey.id, DEMO_QUESTIONNAIRE)
 
         if csv_path and csv_path.exists():
             job = import_service.analyse(db, csv_path.name, csv_path.read_bytes())

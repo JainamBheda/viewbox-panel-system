@@ -30,3 +30,10 @@ All paths above are relative to the `/api/v1` prefix configured in `main.py`.
   verification is performed in this prototype.
 
 No frozen design file was modified; these notes are additive.
+
+## v2 questionnaire runtime
+
+The competitive upgrade design is documented in [`questionnaire-runtime.md`](questionnaire-runtime.md).
+It adds additive tables for questionnaire versions, member responses and autosaved answers,
+plus admin validation/publishing/analytics endpoints and a member questionnaire runner. The
+Day 2 frozen files remain untouched.

@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
-from app.routers import admin, auth, imports, members, meta, public, referrals, sources, surveys
+from app.routers import admin, auth, imports, members, meta, public, questionnaire, referrals, sources, surveys
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -21,7 +21,8 @@ app.add_middleware(
 )
 
 for router in (auth.router, public.router, members.router, sources.router, surveys.router,
-               surveys.admin_router, referrals.router, imports.router, admin.router, meta.router):
+               surveys.admin_router, questionnaire.router, questionnaire.admin_router,
+               referrals.router, imports.router, admin.router, meta.router):
     app.include_router(router, prefix=settings.API_V1_PREFIX)
 
 

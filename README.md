@@ -1,8 +1,9 @@
 # ViewBox Panel System
 
 Full-stack prototype for Concave Insights: a respondent panel with phone/OTP login,
-source and referral attribution, a deterministic eligibility engine, operations tooling,
-messy-CSV import, exports and a mock Meta Lead Ads webhook.
+source and referral attribution, a deterministic eligibility engine, an authenticated
+questionnaire runtime with versioned text DSL, operations tooling, messy-CSV import,
+exports and a mock Meta Lead Ads webhook.
 
 ## Project Overview
 
@@ -16,7 +17,11 @@ ViewBox models three actors:
 
 The prototype is database-backed end to end — no dashboard number or eligibility decision
 is hardcoded. The Day 2 design baseline is frozen in [`design/`](design/); implementation
-clarifications are recorded in [`design/v2/change-log.md`](design/v2/change-log.md).
+clarifications are recorded in [`design/v2/change-log.md`](design/v2/change-log.md) and the
+post-Day-2 questionnaire upgrade in
+[`design/v2/questionnaire-runtime.md`](design/v2/questionnaire-runtime.md). The competitive
+review that motivated the upgrade is summarised in
+[`docs/competitive-comparison.md`](docs/competitive-comparison.md).
 
 ## Tech Stack
 
@@ -92,11 +97,11 @@ the backend runs elsewhere.
 ### 3. Verification commands
 
 ```powershell
-# Backend: 23 tests
+# Backend: 32 tests
 cd backend
 python -m pytest tests -q
 
-# Frontend: 6 behavior tests and a production build
+# Frontend: 8 behavior tests and a production build
 cd ../frontend
 npm test
 npm run build
@@ -106,7 +111,8 @@ For a quick SQLite-only smoke test without PostgreSQL, set
 `DATABASE_URL=sqlite:///./viewbox.db` before running
 `python -m scripts.seed_demo --with-csv` and `uvicorn app.main:app --reload`.
 The seed script calls `create_all` for this convenience; PostgreSQL deployments should
-use `alembic upgrade head`.
+use `alembic upgrade head`. `.github/workflows/ci.yml` runs both test suites, a production
+frontend build and a clean Alembic migration on every push and pull request.
 
 ## Demo Logins and Test Data
 
@@ -144,29 +150,37 @@ No real SMS, payment, or personal data provider is connected.
 | Eligibility engine | Implemented | Deadline → strict rules → 3-month calendar cool-off → quota → flexible rules → approved |
 | Quota concurrency | Implemented | `SELECT … FOR UPDATE` on the survey row; only APPROVED applications consume a slot |
 | Survey/rule administration | Implemented | Create and update surveys, strict/flexible rules, review applications, record completions |
+| Text questionnaire DSL | Implemented (v2) | `Qn | type | text | options`, `SHOW`/`SKIP`/`TERMINATE`/`QUOTA`, `{Qn}` piping, line-numbered validation |
+| Immutable questionnaire versions | Implemented (v2) | Publish activates a numbered frozen AST; responses are pinned to the version they started on |
+| Authenticated questionnaire runner | Implemented (v2) | One response per member, autosaved answers, back navigation, screener termination, quota check |
+| Survey analytics | Implemented (v2) | Started/completed/terminated counts, per-question drop-off, termination reasons, speeder detection |
 | CSV import | Implemented | Hash-based idempotency, staging, preview, per-row transactional confirm, audit error CSV |
 | CSV/XLSX export | Implemented | Uses the currently active search and filters, including server-side pagination |
 | Fraud flags | Implemented | Duplicate phone, self-referral, referral cycle and Meta duplicate flags |
 | Payout ledger | Implemented | Pending/approved/paid transitions; `PAID` requires prior `APPROVED` and full `ADMIN` role |
 | Meta Lead Ads mock | Implemented | Idempotent by `meta_lead_id`; accepts webhook envelope or merged lead payload |
 | Responsive UI | Implemented | Admin sidebar, member bottom navigation, loading/empty/error states, toasts |
-| Automated tests | Implemented | 23 backend + 6 frontend tests passing |
+| Export safety | Implemented | CSV/XLSX escape spreadsheet formula prefixes in respondent-supplied values |
+| CI | Implemented | GitHub Actions runs 32 backend tests, 8 frontend tests, build and Alembic upgrade |
+| Automated tests | Implemented | 32 backend + 8 frontend tests passing |
 
 ## Database Design
 
 The frozen Day 2 ERD and rationale are in
 [`design/database-diagram.md`](design/database-diagram.md); user flows are in
 [`design/user-flow.md`](design/user-flow.md). The initial Alembic revision is
-`backend/migrations/versions/756a4a3af8c6_initial_schema.py`.
+`backend/migrations/versions/756a4a3af8c6_initial_schema.py`. The v2 tables are additive in
+`backend/migrations/versions/c7d9e1f3a5b7_v2_questionnaire_runtime.py`; no frozen file changed.
 
-There are 18 tables grouped by concern:
+There are 21 tables grouped by concern (18 frozen + 3 additive):
 
 | Group | Tables |
 |---|---|
 | Identity | `users`, `otp_challenges` |
 | People & attribution | `members`, `referrals`, `fraud_flags`, `sources`, `source_links`, `referral_links`, `attribution_history` |
 | Surveys | `surveys`, `survey_rules`, `survey_applications`, `survey_completions` |
-| Operations | `import_jobs`, `import_staged_rows`, `import_row_errors`, `meta_leads`, `payout_ledgers` |
+| Questionnaire runtime (v2) | `questionnaire_versions`, `survey_responses`, `survey_answers` |
+| Operations | `import_jobs`, `import_staged_rows`, `import_row_errors`, `meta_leads`, `payout_ledger` |
 
 Key design points:
 
@@ -175,6 +189,8 @@ Key design points:
 * Referrals live in their own table so a source link and a member referral can coexist.
 * Survey eligibility decisions are persisted per survey/member and recalculated after
   profile or rule changes.
+* Questionnaire versions freeze the parsed AST; one authenticated response per member/survey
+  keeps quota, payout and the 3-month cool-off consistent with survey completion.
 * Import staging and error tables keep the original row values for audit; problematic rows
   are skipped, never silently deleted or guessed.
 * Payouts append a ledger row per completion or completed referral; status changes are
@@ -209,6 +225,10 @@ routes; source creation/edits and payout payment require `ADMIN`.
 | GET | `/members/me/referrals` | Referral dashboard with masked phones |
 | GET | `/members/me/surveys` | Live surveys with evaluated eligibility |
 | POST | `/members/me/surveys/{survey_id}/apply` | Persist the decision under a quota lock |
+| POST | `/members/me/surveys/{survey_id}/response/start` | Start or resume a pinned questionnaire response |
+| GET | `/members/me/surveys/{survey_id}/response` | Current question and progress |
+| POST | `/members/me/surveys/{survey_id}/response/answer` | Validate, autosave and advance |
+| POST | `/members/me/surveys/{survey_id}/response/back` | Remove the last answer and navigate back |
 | GET | `/members/me/payouts` | Member reward ledger |
 
 ### Administration
@@ -223,6 +243,10 @@ routes; source creation/edits and payout payment require `ADMIN`.
 | PATCH | `/admin/surveys/{survey_id}` | Update survey fields and rules |
 | GET | `/admin/surveys/{survey_id}/applications` | Review eligibility decisions |
 | POST | `/admin/surveys/{survey_id}/completions/{member_id}` | Record a completion and start cool-off |
+| POST | `/admin/surveys/{survey_id}/questionnaire/validate` | Dry-run line-numbered DSL validation |
+| POST | `/admin/surveys/{survey_id}/questionnaire` | Publish and activate a new version |
+| GET | `/admin/surveys/{survey_id}/questionnaire/versions` | Version history |
+| GET | `/admin/surveys/{survey_id}/analytics` | Completion, drop-off and quality analytics |
 | GET | `/admin/referrals` | List referrals, optionally filtered by stage |
 | PATCH | `/admin/referrals/{referral_id}/stage` | Move LEAD/FIT/COMPLETED/FAILED |
 | POST | `/admin/imports/upload` | Analyse CSV and create a preview job |
@@ -274,6 +298,8 @@ full flow can be exercised locally without a Meta app.
 | Source/referral conflict | Both are credited: the source stays on the member and the referral row is created separately. |
 | Quota | An `APPROVED` application consumes a slot; `WAITLISTED` and `REJECTED` do not. Approvals are serialized with `SELECT … FOR UPDATE`. |
 | Cool-off | Three **calendar** months from the latest `PASSED` completion; the member sees `Eligible again on DD-MM-YYYY.` |
+| Questionnaire DSL | Plain pipe-separated text with stable `Qn` ids; validation reports line numbers and publishes nothing on error. |
+| Response integrity | One response per authenticated member/survey; screener terminations are persisted; completing a questionnaire records the same `PASSED` completion and payout as manual recording. |
 | Dates | Day-first parsing with a `26` century pivot; ambiguous values are imported with `AMBIGUOUS_DATE`, impossible dates are skipped. |
 | OTP | Fixed development code `123456`, displayed in the UI and returned by the API. No SMS provider. |
 | Invalid CSV emails | Set to `NULL` with `INVALID_EMAIL`; the original value stays in the audit report. |

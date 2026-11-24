@@ -13,6 +13,17 @@ HEADERS = [
     "income_range", "interests", "source", "referred_by", "joined_at", "status",
 ]
 
+# Spreadsheet applications evaluate cells that begin with these characters.
+# Escaping at export time keeps respondent-supplied text inert without changing stored data.
+DANGEROUS_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe(value) -> str:
+    text = "" if value is None else str(value)
+    if text and text[0] in DANGEROUS_PREFIXES:
+        return "'" + text
+    return text
+
 
 def _rows(db: Session, search: str, source_id: int | None, city: str | None, status: str | None) -> list[list]:
     page = 1
@@ -21,7 +32,7 @@ def _rows(db: Session, search: str, source_id: int | None, city: str | None, sta
         result = search_members(db, search=search, source_id=source_id, city=city, status=status,
                                 page=page, page_size=500)
         for member in result["items"]:
-            rows.append([
+            rows.append([_safe(value) for value in [
                 member.member_code,
                 member.name,
                 member.user.phone if member.user else "",
@@ -35,7 +46,7 @@ def _rows(db: Session, search: str, source_id: int | None, city: str | None, sta
                 member.referred_by.member_code if member.referred_by else "",
                 member.joined_at.isoformat() if member.joined_at else "",
                 member.status,
-            ])
+            ]])
         if page >= result["pages"]:
             break
         page += 1

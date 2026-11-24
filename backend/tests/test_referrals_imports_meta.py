@@ -133,3 +133,12 @@ def test_admin_export_respects_filters(client, db, admin_headers, sources):
     xlsx = client.get("/api/v1/admin/members/export?format=xlsx", headers=admin_headers)
     assert xlsx.status_code == 200
     assert xlsx.content[:2] == b"PK"
+
+
+def test_export_escapes_spreadsheet_formulas(client, db, admin_headers):
+    make_member(db, phone="9033333333", code="VB80003", city="Mumbai", name="=HYPERLINK(\"http://evil\",\"click\")")
+    response = client.get("/api/v1/admin/members/export?format=csv&city=Mumbai", headers=admin_headers)
+    assert response.status_code == 200
+    assert "'=HYPERLINK" in response.text
+    rows = list(csv.reader(io.StringIO(response.text.lstrip("\ufeff"))))
+    assert rows[1][1] == "'=HYPERLINK(\"http://evil\",\"click\")"

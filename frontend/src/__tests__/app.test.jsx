@@ -18,7 +18,9 @@ vi.mock('../context/AuthContext', () => ({
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 import MemberSurveys from '../pages/MemberSurveys'
+import MemberQuestionnaire from '../pages/MemberQuestionnaire'
 import AdminRespondents from '../pages/AdminRespondents'
+import AdminQuestionnaire from '../pages/AdminQuestionnaire'
 import AdminImports from '../pages/AdminImports'
 import ProtectedRoute from '../components/ProtectedRoute'
 
@@ -147,6 +149,62 @@ describe('admin operations', () => {
     expect(screen.getByText(/Skipped 2/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /confirm import/i }))
     await waitFor(() => expect(mocks.api.post).toHaveBeenCalledWith('/admin/imports/5/confirm'))
+  })
+})
+
+describe('questionnaire runtime', () => {
+  it('starts a questionnaire and autosaves an answer', async () => {
+    mocks.api.get.mockRejectedValue({ response: { status: 404 } })
+    const step = {
+      response_id: 3, status: 'IN_PROGRESS', version: 1, progress: 0, termination_reason: null,
+      question: { id: 'Q1', type: 'single', text: 'Mode?', options: ['Car', 'Bike'], min: null, max: null, required: true },
+    }
+    mocks.api.post.mockImplementation((url) => {
+      if (url.endsWith('/start')) return Promise.resolve({ data: step })
+      if (url.endsWith('/answer')) return Promise.resolve({ data: { ...step, progress: 50, question: { ...step.question, id: 'Q2', text: 'Why Car?' } } })
+      return Promise.resolve({ data: {} })
+    })
+
+    render(<MemoryRouter initialEntries={['/member/surveys/11/respond']}>
+      <Routes><Route path="/member/surveys/:surveyId/respond" element={<MemberQuestionnaire />} /></Routes>
+    </MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: /start questionnaire/i }))
+    expect(await screen.findByText('Mode?')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Car'))
+    fireEvent.click(screen.getByRole('button', { name: /save & next/i }))
+    await waitFor(() => expect(mocks.api.post).toHaveBeenCalledWith(
+      '/members/me/surveys/11/response/answer', { question_id: 'Q1', value: 'Car' },
+    ))
+    expect(await screen.findByText('Why Car?')).toBeInTheDocument()
+  })
+
+  it('shows line-numbered validation errors and version history', async () => {
+    mocks.api.get.mockImplementation((url) => {
+      if (url === '/admin/surveys') return Promise.resolve({ data: [{ id: 11, title: 'Mobility survey' }] })
+      if (url.endsWith('/versions')) return Promise.resolve({ data: [
+        { id: 1, survey_id: 11, version: 1, status: 'ACTIVE', question_count: 2, created_at: '2026-11-24T00:00:00' },
+      ] })
+      if (url.endsWith('/analytics')) return Promise.resolve({ data: {
+        survey_id: 11, active_version: 1, started: 2, completed: 1, in_progress: 1, terminated: 0,
+        questions: [{ id: 'Q1', text: 'Mode?', reached: 2, answered: 1, dropoff: 1 }],
+        termination_reasons: [], quality_flags: { speeders: 0, minimum_completes_for_speeder_check: 5 },
+      } })
+      return Promise.resolve({ data: [] })
+    })
+    mocks.api.post.mockImplementation((url) => url.endsWith('/validate')
+      ? Promise.resolve({ data: { valid: false, errors: [{ line: 2, code: 'UNKNOWN_DIRECTIVE', message: 'Bad line' }] } })
+      : Promise.resolve({ data: {} }))
+
+    render(<MemoryRouter initialEntries={['/admin/surveys/11/questionnaire']}>
+      <Routes><Route path="/admin/surveys/:surveyId/questionnaire" element={<AdminQuestionnaire />} /></Routes>
+    </MemoryRouter>)
+    expect(await screen.findByText('v1')).toBeInTheDocument()
+    expect(screen.getByText('Drop-off by question')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Line 2: Bad line/)
+    expect(screen.getByRole('button', { name: 'Line 2' })).toBeInTheDocument()
   })
 })
 

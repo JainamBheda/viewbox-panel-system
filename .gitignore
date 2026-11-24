@@ -36,3 +36,6 @@ Thumbs.db
 # Generated exports
 backend/exports/
 frontend/coverage/
+# Keep the PNG attachments; ignore local rendering helpers.
+design/exports/*.html
+design/exports/mermaid.min.js

@@ -51,7 +51,10 @@ export default function AdminSurveys() {
         </div>
         <div className="mt-3 flex flex-wrap gap-2">{survey.rules.map((rule) => <span key={rule.id} className="badge bg-slate-100 text-slate-700">
           {rule.field_name} {rule.operator} {rule.expected_value} · {rule.rule_type}</span>)}</div>
-        <button className="btn-secondary mt-4" onClick={() => viewApplicants(survey.id)}>View applicants</button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={() => viewApplicants(survey.id)}>View applicants</button>
+          <a className="btn-secondary" href={`/admin/surveys/${survey.id}/questionnaire`}>Questionnaire & analytics</a>
+        </div>
       </div>)}
     </div>
     <Modal open={open} onClose={() => setOpen(false)} title="Create survey" footer={<><button className="btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button className="btn-primary" onClick={create}>Create survey</button></>}>

@@ -8,6 +8,7 @@ from app.models.member import Member
 from app.models.survey import Survey, SurveyApplication, SurveyCompletion, SurveyRule
 from app.services.eligibility_service import evaluate, recalculate_for_survey
 from app.services.payout_service import ensure_survey_payout
+from app.services import questionnaire_service
 
 
 def list_surveys(db: Session, *, live_only: bool = False) -> list[Survey]:
@@ -25,7 +26,7 @@ def get_survey(db: Session, survey_id: int) -> Survey:
 
 
 def create_survey(db: Session, data: dict, rules: list[dict]) -> Survey:
-    survey = Survey(**data, status=data.get("status", "DRAFT"))
+    survey = Survey(**data)
     db.add(survey)
     db.flush()
     _sync_rules(db, survey, rules)
@@ -75,6 +76,7 @@ def survey_for_member(db: Session, survey_id: int, member_id: int) -> dict:
         "survey": survey,
         "eligibility": {"status": result.status, "reason": result.reason, "rule_results": result.rule_results},
         "application_status": application.eligibility_status if application else None,
+        "has_questionnaire": questionnaire_service.has_active(db, survey.id),
     }
 
 

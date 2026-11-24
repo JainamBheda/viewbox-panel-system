@@ -25,7 +25,7 @@ export default function MemberSurveys() {
     <p className="mt-1 text-sm text-slate-500">Eligibility is evaluated from your profile, survey rules, quota and cool-off period.</p>
     <div className="mt-6 space-y-3">
       {items.length === 0 && <EmptyState title="No live surveys right now" />}
-      {items.map(({ survey, eligibility, application_status }) => <div key={survey.id} className="card">
+      {items.map(({ survey, eligibility, application_status, has_questionnaire }) => <div key={survey.id} className="card">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div><h2 className="text-lg font-semibold">{survey.title}</h2><p className="text-sm text-slate-500">{survey.description}</p></div>
           <StatusBadge status={eligibility.status} />
@@ -40,6 +40,8 @@ export default function MemberSurveys() {
         </ul>}
         <div className="mt-4 flex items-center gap-3">
           <button className="btn-primary" disabled={eligibility.status !== 'APPROVED'} onClick={() => apply(survey.id)}>Apply now</button>
+          {application_status === 'APPROVED' && has_questionnaire && <a className="btn-secondary"
+            href={`/member/surveys/${survey.id}/respond`}>Open questionnaire</a>}
           {application_status && <span className="text-xs text-slate-500">Saved decision: {application_status}</span>}
         </div>
       </div>)}

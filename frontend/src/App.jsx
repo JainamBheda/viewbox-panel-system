@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import MemberHome from './pages/MemberHome'
 import MemberSurveys from './pages/MemberSurveys'
+import MemberQuestionnaire from './pages/MemberQuestionnaire'
 import MemberProfile from './pages/MemberProfile'
 import MemberReferrals from './pages/MemberReferrals'
 import MemberPayouts from './pages/MemberPayouts'
@@ -14,6 +15,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminRespondents from './pages/AdminRespondents'
 import AdminSources from './pages/AdminSources'
 import AdminSurveys from './pages/AdminSurveys'
+import AdminQuestionnaire from './pages/AdminQuestionnaire'
 import AdminReferrals from './pages/AdminReferrals'
 import AdminImports from './pages/AdminImports'
 import AdminMetaLeads from './pages/AdminMetaLeads'
@@ -33,6 +35,7 @@ export default function App() {
     <Route path="/member" element={<ProtectedRoute><MemberLayout /></ProtectedRoute>}>
       <Route index element={<MemberHome />} />
       <Route path="surveys" element={<MemberSurveys />} />
+      <Route path="surveys/:surveyId/respond" element={<MemberQuestionnaire />} />
       <Route path="profile" element={<MemberProfile />} />
       <Route path="referrals" element={<MemberReferrals />} />
       <Route path="payouts" element={<MemberPayouts />} />
@@ -42,6 +45,7 @@ export default function App() {
       <Route path="respondents" element={<AdminRespondents />} />
       <Route path="sources" element={<AdminSources />} />
       <Route path="surveys" element={<AdminSurveys />} />
+      <Route path="surveys/:surveyId/questionnaire" element={<AdminQuestionnaire />} />
       <Route path="referrals" element={<AdminReferrals />} />
       <Route path="imports" element={<AdminImports />} />
       <Route path="meta-leads" element={<AdminMetaLeads />} />
